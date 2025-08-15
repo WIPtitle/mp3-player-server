@@ -1,0 +1,286 @@
+openapi: 3.0.0
+info:
+  title: Audio Server REST API
+  description: Network audio playback service with file storage
+  version: 1.0.0
+
+servers:
+  - url: http://{{host}}:{{port}}
+    description: Audio Server
+    variables:
+      host:
+        default: localhost
+        description: Server hostname or IP address
+      port:
+        default: '8888'
+        description: Server port
+
+tags:
+  - name: Audio Files
+    description: Audio file management
+  - name: Playback
+    description: Audio playback control
+  - name: Status
+    description: Server status
+
+paths:
+  /api/status:
+    get:
+      tags:
+        - Status
+      summary: Get server status
+      description: Returns current playback status and available files
+      operationId: getStatus
+      responses:
+        '200':
+          description: Server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  playing:
+                    type: boolean
+                    description: Whether audio is currently playing
+                  current:
+                    type: string
+                    nullable: true
+                    description: Name of currently playing file
+                  files:
+                    type: array
+                    items:
+                      type: string
+                    description: List of available audio files
+                example:
+                  playing: true
+                  current: "alarm"
+                  files: ["alarm", "waiting"]
+
+  /api/audio:
+    get:
+      tags:
+        - Audio Files
+      summary: List audio files
+      description: Returns list of all stored audio files
+      operationId: listAudioFiles
+      responses:
+        '200':
+          description: List of audio files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: string
+                    description: List of audio file names (without .mp3 extension)
+                example:
+                  files: ["alarm", "waiting"]
+
+  /api/audio/{name}:
+    get:
+      tags:
+        - Audio Files
+      summary: Check if audio file exists
+      description: Checks if an audio file with the given name exists
+      operationId: checkAudioFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Audio file name (with or without .mp3 extension)
+          schema:
+            type: string
+          example: alarm
+      responses:
+        '200':
+          description: File exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+                    example: true
+                  name:
+                    type: string
+                    example: alarm
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Audio file 'alarm' not found"
+
+    put:
+      tags:
+        - Audio Files
+      summary: Save audio file
+      description: |
+        Saves an audio file with the given name. If a file with the same name exists, 
+        it will be overwritten. Maximum file size is 50MB.
+      operationId: saveAudioFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Audio file name (with or without .mp3 extension)
+          schema:
+            type: string
+          example: alarm
+      requestBody:
+        required: true
+        content:
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: File saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Audio file 'alarm' saved"
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "File too large (max 50MB)"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+    delete:
+      tags:
+        - Audio Files
+      summary: Delete audio file
+      description: |
+        Deletes an audio file. If the file is currently playing, 
+        playback will be stopped first.
+      operationId: deleteAudioFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Audio file name (with or without .mp3 extension)
+          schema:
+            type: string
+          example: alarm
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Audio file 'alarm' deleted"
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Audio file 'alarm' not found"
+
+  /api/play/{name}:
+    post:
+      tags:
+        - Playback
+      summary: Play audio file
+      description: |
+        Starts playing the specified audio file in a loop. 
+        If another file is playing, it will be stopped first.
+      operationId: playAudioFile
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Audio file name (with or without .mp3 extension)
+          schema:
+            type: string
+          example: alarm
+      responses:
+        '200':
+          description: Playback started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Playing 'alarm'"
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Audio file 'alarm' not found"
+        '500':
+          description: Playback failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Failed to start playback"
+
+  /api/stop:
+    post:
+      tags:
+        - Playback
+      summary: Stop playback
+      description: Stops current audio playback
+      operationId: stopPlayback
+      responses:
+        '200':
+          description: Playback stopped or no audio playing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    examples:
+                      - "Playback stopped"
+                      - "No audio playing"

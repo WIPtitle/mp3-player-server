@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Server Console</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 {
+            color: #0f0;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .panel {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        .panel h3 {
+            color: #0f0;
+            margin-top: 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            background: #030;
+            border: 1px solid #0f0;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+        .status.playing {
+            background: #300;
+            border-color: #f00;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #222;
+            background: #050505;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .file-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        .file-item:hover {
+            border-color: #0f0;
+            background: #1a1a1a;
+        }
+        .file-item.playing {
+            background: #200;
+            border-color: #f00;
+            box-shadow: 0 0 10px #f00;
+        }
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        button {
+            background: #222;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #333;
+            box-shadow: 0 0 5px #0f0;
+        }
+        button:active {
+            background: #0f0;
+            color: #000;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #444;
+            color: #666;
+        }
+        button.danger {
+            border-color: #f00;
+            color: #f00;
+        }
+        button.danger:hover {
+            background: #300;
+            box-shadow: 0 0 5px #f00;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .upload-label {
+            display: inline-block;
+            background: #222;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-label:hover {
+            background: #333;
+            box-shadow: 0 0 5px #0f0;
+        }
+        .response {
+            margin-top: 10px;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #444;
+            border-radius: 3px;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .response.error {
+            border-color: #f00;
+            color: #f88;
+        }
+        .response.success {
+            border-color: #0f0;
+            color: #8f8;
+        }
+        .upload-progress {
+            margin-top: 10px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #0f0;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .server-info {
+            font-size: 12px;
+            color: #888;
+            margin-top: 10px;
+            padding: 10px;
+            background: #050505;
+            border: 1px solid #222;
+            border-radius: 3px;
+        }
+        .server-info span {
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Audio Server Console</h1>
+
+    <div class="status" id="status">
+        <strong>Status:</strong> <span id="statusText">Connecting...</span> |
+        <strong>Playing:</strong> <span id="currentFile">None</span>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h3>📁 File Management</h3>
+
+            <div>
+                <label for="fileInput" class="upload-label">
+                    📤 Upload Audio File
+                </label>
+                <input type="file" id="fileInput" accept="audio/mpeg,audio/mp3">
+                <input type="text" id="fileName" placeholder="File name (optional)"
+                       style="background: #222; color: #0f0; border: 1px solid #333;
+                              padding: 5px; margin-left: 10px; border-radius: 3px;">
+            </div>
+
+            <div class="upload-progress" id="uploadProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <small id="progressText">Uploading...</small>
+            </div>
+
+            <h4 style="margin-top: 20px; color: #888;">Stored Files</h4>
+            <div class="file-list" id="fileList">
+                <div style="color: #666; text-align: center;">Loading...</div>
+            </div>
+
+            <div class="server-info">
+                <strong>Endpoint:</strong> <span id="endpoint">http://localhost:8888</span><br>
+                <strong>Files:</strong> <span id="fileCount">0</span><br>
+                <strong>Max size:</strong> <span>50MB per file</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>🎮 Playback Control</h3>
+
+            <div class="controls-grid">
+                <button onclick="stopPlayback()" id="stopBtn">⏹️ Stop All</button>
+                <button onclick="refreshFiles()">🔄 Refresh</button>
+            </div>
+
+            <h4 style="margin-top: 20px; color: #888;">Quick Actions</h4>
+            <div style="margin: 10px 0;">
+                <button onclick="getStatus()">📊 Get Status</button>
+                <button onclick="listFiles()">📋 List Files API</button>
+            </div>
+
+            <div id="apiResponse" class="response" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let currentlyPlaying = null;
+        let files = [];
+
+        function showResponse(data, isError = false) {
+            const resp = document.getElementById('apiResponse');
+            resp.className = 'response ' + (isError ? 'error' : 'success');
+            resp.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+            resp.style.display = 'block';
+
+            setTimeout(() => {
+                resp.style.display = 'none';
+            }, 5000);
+        }
+
+        async function apiCall(method, endpoint, body = null, isRaw = false) {
+            try {
+                const options = {
+                    method: method,
+                    headers: isRaw ? {} : {'Content-Type': 'application/json'}
+                };
+                if (body) {
+                    options.body = isRaw ? body : JSON.stringify(body);
+                }
+
+                const response = await fetch(API_BASE + endpoint, options);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Request failed');
+                }
+
+                return data;
+            } catch (error) {
+                showResponse(error.message, true);
+                throw error;
+            }
+        }
+
+        async function refreshFiles() {
+            try {
+                const data = await apiCall('GET', '/audio');
+                files = data.files || [];
+                updateFileList();
+                document.getElementById('fileCount').textContent = files.length;
+            } catch (error) {
+                console.error('Error refreshing files:', error);
+            }
+        }
+
+        async function getStatus() {
+            try {
+                const data = await apiCall('GET', '/status');
+                showResponse(data);
+
+                currentlyPlaying = data.current;
+                updateStatus(data.playing, data.current);
+
+                files = data.files || [];
+                updateFileList();
+            } catch (error) {
+                console.error('Error getting status:', error);
+            }
+        }
+
+        async function listFiles() {
+            try {
+                const data = await apiCall('GET', '/audio');
+                showResponse(data);
+            } catch (error) {
+                console.error('Error listing files:', error);
+            }
+        }
+
+        function updateStatus(playing, current) {
+            const statusEl = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const currentFile = document.getElementById('currentFile');
+
+            if (playing) {
+                statusEl.classList.add('playing');
+                statusText.textContent = 'Playing';
+                currentFile.textContent = current || 'Unknown';
+            } else {
+                statusEl.classList.remove('playing');
+                statusText.textContent = 'Idle';
+                currentFile.textContent = 'None';
+            }
+        }
+
+        function updateFileList() {
+            const listEl = document.getElementById('fileList');
+
+            if (files.length === 0) {
+                listEl.innerHTML = '<div style="color: #666; text-align: center;">No files stored</div>';
+                return;
+            }
+
+            listEl.innerHTML = files.map(file => `
+                <div class="file-item ${currentlyPlaying === file ? 'playing' : ''}" id="file-${file}">
+                    <span>🎵 ${file}.mp3</span>
+                    <div class="file-actions">
+                        <button onclick="playFile('${file}')" ${currentlyPlaying === file ? 'disabled' : ''}>
+                            ▶️ Play
+                        </button>
+                        <button class="danger" onclick="deleteFile('${file}')">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function playFile(name) {
+            try {
+                const data = await apiCall('POST', `/play/${name}`);
+                showResponse(data);
+
+                currentlyPlaying = name;
+                updateStatus(true, name);
+                updateFileList();
+            } catch (error) {
+                console.error('Error playing file:', error);
+            }
+        }
+
+        async function stopPlayback() {
+            try {
+                const data = await apiCall('POST', '/stop');
+                showResponse(data);
+
+                currentlyPlaying = null;
+                updateStatus(false, null);
+                updateFileList();
+            } catch (error) {
+                console.error('Error stopping playback:', error);
+            }
+        }
+
+        async function deleteFile(name) {
+            if (!confirm(`Delete ${name}.mp3?`)) return;
+
+            try {
+                const data = await apiCall('DELETE', `/audio/${name}`);
+                showResponse(data);
+
+                if (currentlyPlaying === name) {
+                    currentlyPlaying = null;
+                    updateStatus(false, null);
+                }
+
+                await refreshFiles();
+            } catch (error) {
+                console.error('Error deleting file:', error);
+            }
+        }
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            let fileName = document.getElementById('fileName').value.trim();
+            if (!fileName) {
+                fileName = file.name.replace(/\.mp3$/i, '');
+            }
+
+            const progressEl = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+
+            progressEl.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Uploading...';
+
+            try {
+                // Simulate progress (real progress would need XMLHttpRequest)
+                progressFill.style.width = '50%';
+
+                const data = await apiCall('PUT', `/audio/${fileName}`, file, true);
+
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Upload complete!';
+
+                showResponse(data);
+                await refreshFiles();
+
+                // Reset form
+                e.target.value = '';
+                document.getElementById('fileName').value = '';
+
+                setTimeout(() => {
+                    progressEl.style.display = 'none';
+                }, 2000);
+            } catch (error) {
+                progressText.textContent = 'Upload failed!';
+                progressFill.style.width = '0%';
+                console.error('Error uploading file:', error);
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('endpoint').textContent = window.location.origin;
+            await getStatus();
+            await refreshFiles();
+
+            // Auto-refresh status every 5 seconds
+            setInterval(async () => {
+                try {
+                    const response = await fetch(API_BASE + '/status');
+                    const data = await response.json();
+                    if (response.ok) {
+                        currentlyPlaying = data.current;
+                        updateStatus(data.playing, data.current);
+                        if (JSON.stringify(files) !== JSON.stringify(data.files)) {
+                            files = data.files || [];
+                            updateFileList();
+                        }
+                    }
+                } catch (error) {
+                    // Silent fail for auto-refresh
+                }
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

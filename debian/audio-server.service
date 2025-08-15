@@ -1,0 +1,13 @@
+[Unit]
+Description=Audio Server Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/lib/audio-server/audio-server-main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
