@@ -3,11 +3,17 @@
 
 import os
 import sys
+import http.server
 import socketserver
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from audio_server import AudioStorage, AudioPlayer, AudioRequestHandler, CONFIG_FILE
+
+
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True  # Important: threads die when main dies
 
 
 def main():
@@ -39,11 +45,15 @@ def main():
     AudioRequestHandler.player = player
     AudioRequestHandler.html_file = html_file
 
-    # Start HTTP server
-    with socketserver.ThreadingTCPServer(("", port), AudioRequestHandler) as httpd:
+    # Use standard HTTPServer for simpler threading
+    with ThreadedTCPServer(("", port), AudioRequestHandler) as httpd:
         print(f"Audio Server started on port {port}")
         print(f"Storage directory: {storage_dir}")
-        httpd.serve_forever()
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            player.stop()
 
 
 if __name__ == '__main__':
