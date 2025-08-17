@@ -15,7 +15,7 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             return json.load(f)
-    return {"port": 8888, "storage_dir": "/var/lib/audio-server/data"}
+    return {"port": 8888, "storage_dir": "/var/lib/audio-server/data", "audio_device": None}
 
 
 def save_config(config):
@@ -64,9 +64,11 @@ def get_status():
     config = load_config()
     port = config.get("port", 8888)
     storage_dir = config.get("storage_dir", "/var/lib/audio-server/data")
+    audio_device = config.get("audio_device")
 
     print(f"Current port: {port}")
     print(f"Storage directory: {storage_dir}")
+    print(f"Audio device: {audio_device if audio_device else 'Not configured'}")
 
     try:
         result = subprocess.run(["systemctl", "is-active", SERVICE_NAME],

@@ -47,6 +47,10 @@
             border-color: #f00;
             animation: pulse 2s infinite;
         }
+        .status.no-device {
+            background: #330;
+            border-color: #ff0;
+        }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -82,6 +86,7 @@
         .file-actions {
             display: flex;
             gap: 5px;
+            align-items: center;
         }
         button {
             background: #222;
@@ -115,6 +120,14 @@
             background: #300;
             box-shadow: 0 0 5px #f00;
         }
+        button.primary {
+            border-color: #0ff;
+            color: #0ff;
+        }
+        button.primary:hover {
+            background: #033;
+            box-shadow: 0 0 5px #0ff;
+        }
         input[type="file"] {
             display: none;
         }
@@ -131,6 +144,19 @@
         .upload-label:hover {
             background: #333;
             box-shadow: 0 0 5px #0f0;
+        }
+        select {
+            background: #222;
+            color: #0f0;
+            border: 1px solid #333;
+            padding: 5px;
+            border-radius: 3px;
+            width: 100%;
+            margin: 5px 0;
+        }
+        select:focus {
+            border-color: #0f0;
+            outline: none;
         }
         .response {
             margin-top: 10px;
@@ -196,6 +222,36 @@
         .server-info span {
             color: #0f0;
         }
+        .device-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        .device-section h4 {
+            color: #0ff;
+            margin-top: 0;
+        }
+        .warning {
+            background: #330;
+            border: 1px solid #ff0;
+            color: #ff0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin: 5px 0;
+        }
+        input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            accent-color: #0f0;
+        }
     </style>
 </head>
 <body>
@@ -203,12 +259,27 @@
 
     <div class="status" id="status">
         <strong>Status:</strong> <span id="statusText">Connecting...</span> |
-        <strong>Playing:</strong> <span id="currentFile">None</span>
+        <strong>Playing:</strong> <span id="currentFile">None</span> |
+        <strong>Device:</strong> <span id="currentDevice">None</span>
     </div>
 
     <div class="container">
         <div class="panel">
-            <h3>📁 File Management</h3>
+            <h3>🔊 Audio Device Configuration</h3>
+
+            <div class="device-section">
+                <h4>Select Audio Output Device</h4>
+                <div id="deviceWarning" class="warning" style="display:none;">
+                    ⚠️ No audio device configured! Select a device below to enable playback.
+                </div>
+                <select id="deviceSelect">
+                    <option value="">Loading devices...</option>
+                </select>
+                <button class="primary" onclick="setAudioDevice()">💾 Save Device</button>
+                <button onclick="refreshDevices()">🔄 Refresh Devices</button>
+            </div>
+
+            <h3 style="margin-top: 20px;">📁 File Management</h3>
 
             <div>
                 <label for="fileInput" class="upload-label">
@@ -247,6 +318,11 @@
                 <button onclick="refreshFiles()">🔄 Refresh</button>
             </div>
 
+            <div class="checkbox-label">
+                <input type="checkbox" id="loopCheckbox" checked>
+                <label for="loopCheckbox">🔁 Loop playback</label>
+            </div>
+
             <h4 style="margin-top: 20px; color: #888;">Quick Actions</h4>
             <div style="margin: 10px 0;">
                 <button onclick="getStatus()">📊 Get Status</button>
@@ -261,6 +337,7 @@
         const API_BASE = window.location.origin + '/api';
         let currentlyPlaying = null;
         let files = [];
+        let currentDevice = null;
 
         function showResponse(data, isError = false) {
             const resp = document.getElementById('apiResponse');
@@ -297,6 +374,69 @@
             }
         }
 
+        async function refreshDevices() {
+            try {
+                const data = await apiCall('GET', '/devices');
+                const select = document.getElementById('deviceSelect');
+
+                currentDevice = data.current;
+
+                if (data.devices.length === 0) {
+                    select.innerHTML = '<option value="">No audio devices found</option>';
+                } else {
+                    select.innerHTML = '<option value="">-- Select a device --</option>';
+                    data.devices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.id;
+                        option.textContent = `${device.name} (${device.id})`;
+                        if (device.id === currentDevice) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                }
+
+                updateDeviceStatus();
+            } catch (error) {
+                console.error('Error refreshing devices:', error);
+            }
+        }
+
+        async function setAudioDevice() {
+            const select = document.getElementById('deviceSelect');
+            const device = select.value;
+
+            if (!device) {
+                showResponse('Please select a device', true);
+                return;
+            }
+
+            try {
+                const data = await apiCall('PUT', '/device', { device: device });
+                showResponse(data);
+                currentDevice = device;
+                updateDeviceStatus();
+            } catch (error) {
+                console.error('Error setting device:', error);
+            }
+        }
+
+        function updateDeviceStatus() {
+            const statusEl = document.getElementById('status');
+            const deviceEl = document.getElementById('currentDevice');
+            const warning = document.getElementById('deviceWarning');
+
+            if (currentDevice) {
+                deviceEl.textContent = currentDevice;
+                warning.style.display = 'none';
+                statusEl.classList.remove('no-device');
+            } else {
+                deviceEl.textContent = 'None';
+                warning.style.display = 'block';
+                statusEl.classList.add('no-device');
+            }
+        }
+
         async function refreshFiles() {
             try {
                 const data = await apiCall('GET', '/audio');
@@ -314,7 +454,9 @@
                 showResponse(data);
 
                 currentlyPlaying = data.current;
+                currentDevice = data.audio_device;
                 updateStatus(data.playing, data.current);
+                updateDeviceStatus();
 
                 files = data.files || [];
                 updateFileList();
@@ -372,8 +514,15 @@
         }
 
         async function playFile(name) {
+            if (!currentDevice) {
+                showResponse('Please select an audio device first!', true);
+                return;
+            }
+
+            const loop = document.getElementById('loopCheckbox').checked;
+
             try {
-                const data = await apiCall('POST', `/play/${name}`);
+                const data = await apiCall('POST', `/play/${name}?loop=${loop}`);
                 showResponse(data);
 
                 currentlyPlaying = name;
@@ -433,7 +582,6 @@
             progressText.textContent = 'Uploading...';
 
             try {
-                // Simulate progress (real progress would need XMLHttpRequest)
                 progressFill.style.width = '50%';
 
                 const data = await apiCall('PUT', `/audio/${fileName}`, file, true);
@@ -444,7 +592,6 @@
                 showResponse(data);
                 await refreshFiles();
 
-                // Reset form
                 e.target.value = '';
                 document.getElementById('fileName').value = '';
 
@@ -461,6 +608,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('endpoint').textContent = window.location.origin;
+            await refreshDevices();
             await getStatus();
             await refreshFiles();
 
@@ -471,7 +619,9 @@
                     const data = await response.json();
                     if (response.ok) {
                         currentlyPlaying = data.current;
+                        currentDevice = data.audio_device;
                         updateStatus(data.playing, data.current);
+                        updateDeviceStatus();
                         if (JSON.stringify(files) !== JSON.stringify(data.files)) {
                             files = data.files || [];
                             updateFileList();

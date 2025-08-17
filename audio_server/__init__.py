@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 """Audio Server - Network audio playback service."""
 
-from .config import CONFIG_FILE
+from .config import CONFIG_FILE, load_config, save_config
 from .storage import AudioStorage
 from .player import AudioPlayer
 from .server import AudioRequestHandler
 
-__version__ = "1.0.0"
-__all__ = ["AudioStorage", "AudioPlayer", "AudioRequestHandler", "CONFIG_FILE"]
+__version__ = "1.4.0"
+__all__ = ["AudioStorage", "AudioPlayer", "AudioRequestHandler", "CONFIG_FILE", "load_config", "save_config"]

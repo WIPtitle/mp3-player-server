@@ -14,6 +14,8 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
     storage = None
     player = None
     html_file = None
+    config = None
+    user_mode = False
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -33,6 +35,10 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self._list_audio()
         elif self.path.startswith('/api/audio/'):
             self._check_audio()
+        elif self.path == '/api/devices':
+            self._list_devices()
+        elif self.path == '/api/device':
+            self._get_current_device()
         else:
             self.send_error(404, "Not Found")
 
@@ -54,6 +60,8 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         """Handle PUT requests."""
         if self.path.startswith('/api/audio/'):
             self._save_audio()
+        elif self.path == '/api/device':
+            self._set_device()
         else:
             self.send_error(404, "Not Found")
 
@@ -78,7 +86,8 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         response = {
             "playing": self.player.is_playing(),
             "current": self.player.get_current(),
-            "files": self.storage.list_files()
+            "files": self.storage.list_files(),
+            "audio_device": self.player.get_audio_device()
         }
         self._send_json_response(200, response)
 
@@ -127,17 +136,35 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _play_audio(self):
         """Play audio file."""
-        name = self.path.split('/api/play/')[1]
+        # Parse path and query parameters
+        path_parts = self.path.split('?')
+        name = path_parts[0].split('/api/play/')[1]
+
+        # Check for loop parameter (default true for backwards compatibility)
+        loop = True
+        if len(path_parts) > 1:
+            params = {}
+            for param in path_parts[1].split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    params[key] = value
+            if 'loop' in params:
+                loop = params['loop'].lower() in ('true', '1', 'yes')
+
+        # Check if audio device is configured
+        if not self.player.get_audio_device():
+            self._send_json_response(400, {"error": "No audio device configured. Please select an audio device first."})
+            return
 
         file_path = self.storage.get_path(name)
         if not file_path:
             self._send_json_response(404, {"error": f"Audio file '{name}' not found"})
             return
 
-        if self.player.play(file_path):
-            self._send_json_response(200, {"message": f"Playing '{name}'"})
+        if self.player.play(file_path, loop=loop):
+            self._send_json_response(200, {"message": f"Playing '{name}'" + (" (loop)" if loop else " (once)")})
         else:
-            self._send_json_response(500, {"error": "Failed to start playback"})
+            self._send_json_response(500, {"error": "Failed to start playback. Check audio device configuration."})
 
     def _stop_audio(self):
         """Stop audio playback."""
@@ -146,13 +173,59 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         else:
             self._send_json_response(200, {"message": "No audio playing"})
 
+    def _list_devices(self):
+        """List available audio devices."""
+        devices = self.player.list_audio_devices()
+        current = self.player.get_audio_device()
+        self._send_json_response(200, {
+            "devices": devices,
+            "current": current
+        })
+
+    def _get_current_device(self):
+        """Get current audio device."""
+        device = self.player.get_audio_device()
+        self._send_json_response(200, {"device": device})
+
+    def _set_device(self):
+        """Set audio device."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 0:
+                data = json.loads(self.rfile.read(content_length))
+                device = data.get('device')
+            else:
+                self._send_json_response(400, {"error": "No device specified"})
+                return
+
+            # Update player
+            self.player.set_audio_device(device)
+
+            # Save to config
+            self.config['audio_device'] = device
+
+            # Write config to file
+            import json
+            with open('/etc/audio-server/config.json', 'w') as f:
+                json.dump(self.config, f, indent=2)
+
+            self._send_json_response(200, {"message": f"Audio device set to '{device}'"})
+        except Exception as e:
+            self._send_json_response(500, {"error": str(e)})
+
     def _send_json_response(self, code: int, data: Dict[str, Any]):
         """Send JSON response."""
-        self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        try:
+            self.send_response(code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        except (BrokenPipeError, ConnectionResetError):
+            # Client disconnected, ignore
+            pass
+        except Exception as e:
+            print(f"Error sending response: {e}")
 
     def log_message(self, format, *args):
         """Suppress default logging."""

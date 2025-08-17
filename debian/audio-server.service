@@ -1,13 +1,15 @@
 [Unit]
 Description=Audio Server Service
-After=network.target
+After=network.target sound.target
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 /usr/lib/audio-server/audio-server-main.py
+Group=audio
+ExecStart=/usr/bin/python3 -u /usr/lib/audio-server/audio-server-main.py
 Restart=on-failure
 RestartSec=5
+Environment="PYTHONUNBUFFERED=1"
 
 [Install]
 WantedBy=multi-user.target
