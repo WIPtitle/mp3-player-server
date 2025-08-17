@@ -27,14 +27,14 @@ class AudioPlayer:
 
     def play(self, file_path: Path, loop: bool = True) -> bool:
         """Start playing an audio file."""
+        # Check if audio device is configured
+        if not self.audio_device:
+            return False
+
+        # Stop any current playback - do this outside the lock to avoid deadlock
+        self._stop_internal()
+
         with self.lock:
-            # Check if audio device is configured
-            if not self.audio_device:
-                return False
-
-            # Stop any current playback
-            self.stop()
-
             try:
                 # Build command
                 cmd = ["mpg123", "-q"]
@@ -60,15 +60,20 @@ class AudioPlayer:
             except Exception:
                 return False
 
-    def stop(self) -> bool:
-        """Stop current playback."""
+    def _stop_internal(self) -> bool:
+        """Internal stop method without lock - for use when lock is already held or to avoid deadlock."""
         with self.lock:
             if self.current_process:
                 try:
                     self.current_process.terminate()
-                    self.current_process.wait(timeout=2)
+                    # Don't wait too long to avoid blocking
+                    self.current_process.wait(timeout=1)
                 except subprocess.TimeoutExpired:
-                    self.current_process.kill()
+                    try:
+                        self.current_process.kill()
+                        self.current_process.wait(timeout=0.5)
+                    except:
+                        pass
                 except Exception:
                     pass
 
@@ -77,17 +82,23 @@ class AudioPlayer:
                 return True
             return False
 
+    def stop(self) -> bool:
+        """Stop current playback."""
+        return self._stop_internal()
+
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
         with self.lock:
             if self.current_process:
+                # Use poll() which is non-blocking
                 return self.current_process.poll() is None
             return False
 
     def get_current(self) -> Optional[str]:
         """Get name of currently playing file."""
+        # Quick check without holding lock for too long
         with self.lock:
-            if self.is_playing():
+            if self.current_process and self.current_process.poll() is None:
                 return self.current_file
             return None
 
@@ -97,19 +108,22 @@ class AudioPlayer:
         devices = []
 
         try:
-            # Run aplay with timeout
+            # Run aplay with shorter timeout and handle errors better
             result = subprocess.run(
                 ["aplay", "-l"],
                 capture_output=True,
                 text=True,
-                check=True,
-                timeout=5,
+                timeout=2,  # Reduced timeout
+                check=False,  # Don't raise on non-zero exit
                 env={'LANG': 'C'}  # Force English output for parsing
             )
 
+            # Check if command succeeded
+            if result.returncode != 0:
+                return devices
+
             # Parse aplay output
             lines = result.stdout.split('\n')
-            current_card = None
 
             for line in lines:
                 # Match card line
@@ -135,8 +149,8 @@ class AudioPlayer:
                         "device_name": device_name
                     })
 
-        except subprocess.CalledProcessError:
-            # If aplay fails, return empty list
+        except subprocess.TimeoutExpired:
+            # If aplay times out, return empty list
             pass
         except Exception:
             # Any other error, return empty list

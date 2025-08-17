@@ -204,8 +204,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             # Save to config
             self.config['audio_device'] = device
 
-            # Write config to file
-            import json
+            # Write config to file (json already imported at top)
             with open('/etc/audio-server/config.json', 'w') as f:
                 json.dump(self.config, f, indent=2)
 

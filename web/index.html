@@ -252,6 +252,17 @@
             height: 15px;
             accent-color: #0f0;
         }
+        /* New style for playback options container */
+        .playback-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        /* Adjusted file list height */
+        .right-panel .file-list {
+            max-height: 250px;
+        }
     </style>
 </head>
 <body>
@@ -298,11 +309,6 @@
                 <small id="progressText">Uploading...</small>
             </div>
 
-            <h4 style="margin-top: 20px; color: #888;">Stored Files</h4>
-            <div class="file-list" id="fileList">
-                <div style="color: #666; text-align: center;">Loading...</div>
-            </div>
-
             <div class="server-info">
                 <strong>Endpoint:</strong> <span id="endpoint">http://localhost:8888</span><br>
                 <strong>Files:</strong> <span id="fileCount">0</span><br>
@@ -310,17 +316,25 @@
             </div>
         </div>
 
-        <div class="panel">
+        <div class="panel right-panel">
             <h3>🎮 Playback Control</h3>
 
-            <div class="controls-grid">
-                <button onclick="stopPlayback()" id="stopBtn">⏹️ Stop All</button>
-                <button onclick="refreshFiles()">🔄 Refresh</button>
+            <!-- Combined playback controls and loop option -->
+            <div class="playback-options">
+                <div>
+                    <button onclick="stopPlayback()" id="stopBtn">⏹️ Stop All</button>
+                    <button onclick="refreshFiles()">🔄 Refresh</button>
+                </div>
+                <div class="checkbox-label">
+                    <input type="checkbox" id="loopCheckbox" checked>
+                    <label for="loopCheckbox">🔁 Loop playback</label>
+                </div>
             </div>
 
-            <div class="checkbox-label">
-                <input type="checkbox" id="loopCheckbox" checked>
-                <label for="loopCheckbox">🔁 Loop playback</label>
+            <!-- Moved file list to the right panel -->
+            <h4 style="margin-top: 0; color: #888;">Stored Files</h4>
+            <div class="file-list" id="fileList">
+                <div style="color: #666; text-align: center;">Loading...</div>
             </div>
 
             <h4 style="margin-top: 20px; color: #888;">Quick Actions</h4>
