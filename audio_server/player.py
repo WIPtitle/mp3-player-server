@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Audio playback management."""
+"""Audio playback management with volume control."""
 
 import subprocess
 import threading
@@ -10,11 +10,12 @@ from typing import Optional, List, Dict
 
 
 class AudioPlayer:
-    """Handles audio playback using mpg123."""
+    """Handles audio playback using mpg123 with volume control."""
 
     def __init__(self, audio_device: Optional[str] = None):
         self.current_process: Optional[subprocess.Popen] = None
         self.current_file: Optional[str] = None
+        self.current_volume: int = 50  # Default volume 50%
         self.audio_device = audio_device
         self.lock = threading.Lock()
 
@@ -26,11 +27,22 @@ class AudioPlayer:
         """Get the current audio output device."""
         return self.audio_device
 
-    def play(self, file_path: Path, loop: bool = True) -> bool:
-        """Start playing an audio file."""
+    def play(self, file_path: Path, volume: int = 50, loop: bool = True) -> bool:
+        """
+        Start playing an audio file.
+
+        Args:
+            file_path: Path to the audio file
+            volume: Volume level (0-100)
+            loop: Whether to loop the audio
+        """
         # Check if audio device is configured
         if not self.audio_device:
             return False
+
+        # Validate volume
+        volume = max(0, min(100, volume))
+        self.current_volume = volume
 
         # Stop any current playback - do this outside the lock to avoid deadlock
         self._stop_internal()
@@ -42,6 +54,12 @@ class AudioPlayer:
 
                 # Add audio device
                 cmd.extend(["-a", self.audio_device])
+
+                # Add volume control
+                # mpg123 uses -f for gain/volume where 32768 is normal (100%)
+                # Scale volume from 0-100 to 0-32768
+                gain = int((volume / 100.0) * 32768)
+                cmd.extend(["-f", str(gain)])
 
                 # Add loop if requested
                 if loop:
@@ -74,6 +92,7 @@ class AudioPlayer:
                 print(f"Error starting playback: {e}")
                 self.current_process = None
                 self.current_file = None
+                self.current_volume = 50
                 return False
 
     def _stop_internal(self) -> bool:
@@ -95,6 +114,7 @@ class AudioPlayer:
 
                 self.current_process = None
                 self.current_file = None
+                self.current_volume = 50
                 return True
             return False
 
@@ -117,6 +137,13 @@ class AudioPlayer:
             if self.current_process and self.current_process.poll() is None:
                 return self.current_file
             return None
+
+    def get_current_volume(self) -> int:
+        """Get current volume level."""
+        with self.lock:
+            if self.current_process and self.current_process.poll() is None:
+                return self.current_volume
+            return 50  # Default volume when not playing
 
     @staticmethod
     def list_audio_devices() -> List[Dict[str, str]]:

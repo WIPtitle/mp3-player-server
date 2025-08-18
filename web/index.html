@@ -56,7 +56,7 @@
             50% { opacity: 0.7; }
         }
         .file-list {
-            max-height: 300px;
+            max-height: 250px;
             overflow-y: auto;
             border: 1px solid #222;
             background: #050505;
@@ -252,16 +252,83 @@
             height: 15px;
             accent-color: #0f0;
         }
-        /* New style for playback options container */
         .playback-options {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 15px;
         }
-        /* Adjusted file list height */
         .right-panel .file-list {
-            max-height: 250px;
+            max-height: 200px;
+        }
+        /* Volume control styles */
+        .volume-control {
+            margin: 15px 0;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        .volume-control h4 {
+            color: #0ff;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .volume-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #222;
+            outline: none;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #0f0;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 5px #0f0;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #0f0;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 5px #0f0;
+            border: none;
+        }
+        .volume-value {
+            min-width: 45px;
+            text-align: center;
+            color: #0ff;
+            font-weight: bold;
+        }
+        .volume-icons {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .volume-icon {
+            cursor: pointer;
+            padding: 2px 5px;
+            border: 1px solid #333;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        .volume-icon:hover {
+            border-color: #0f0;
+            background: #222;
         }
     </style>
 </head>
@@ -271,6 +338,7 @@
     <div class="status" id="status">
         <strong>Status:</strong> <span id="statusText">Connecting...</span> |
         <strong>Playing:</strong> <span id="currentFile">None</span> |
+        <strong>Volume:</strong> <span id="currentVolume">--</span>% |
         <strong>Device:</strong> <span id="currentDevice">None</span>
     </div>
 
@@ -319,6 +387,21 @@
         <div class="panel right-panel">
             <h3>🎮 Playback Control</h3>
 
+            <!-- Volume Control -->
+            <div class="volume-control">
+                <h4>🔊 Volume Control</h4>
+                <div class="volume-slider-container">
+                    <div class="volume-icons">
+                        <span class="volume-icon" onclick="setVolume(0)" title="Mute">🔇</span>
+                        <span class="volume-icon" onclick="setVolume(25)" title="25%">🔉</span>
+                        <span class="volume-icon" onclick="setVolume(50)" title="50%">🔊</span>
+                        <span class="volume-icon" onclick="setVolume(100)" title="Max">📢</span>
+                    </div>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="50" step="1">
+                    <span class="volume-value" id="volumeValue">50%</span>
+                </div>
+            </div>
+
             <!-- Combined playback controls and loop option -->
             <div class="playback-options">
                 <div>
@@ -331,7 +414,7 @@
                 </div>
             </div>
 
-            <!-- Moved file list to the right panel -->
+            <!-- File list -->
             <h4 style="margin-top: 0; color: #888;">Stored Files</h4>
             <div class="file-list" id="fileList">
                 <div style="color: #666; text-align: center;">Loading...</div>
@@ -352,6 +435,20 @@
         let currentlyPlaying = null;
         let files = [];
         let currentDevice = null;
+        let currentPlayingVolume = null;
+
+        // Volume control setup
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeValue = document.getElementById('volumeValue');
+
+        volumeSlider.addEventListener('input', function() {
+            volumeValue.textContent = this.value + '%';
+        });
+
+        function setVolume(value) {
+            volumeSlider.value = value;
+            volumeValue.textContent = value + '%';
+        }
 
         function showResponse(data, isError = false) {
             const resp = document.getElementById('apiResponse');
@@ -469,7 +566,8 @@
 
                 currentlyPlaying = data.current;
                 currentDevice = data.audio_device;
-                updateStatus(data.playing, data.current);
+                currentPlayingVolume = data.current_volume;
+                updateStatus(data.playing, data.current, data.current_volume);
                 updateDeviceStatus();
 
                 files = data.files || [];
@@ -488,19 +586,22 @@
             }
         }
 
-        function updateStatus(playing, current) {
+        function updateStatus(playing, current, volume) {
             const statusEl = document.getElementById('status');
             const statusText = document.getElementById('statusText');
             const currentFile = document.getElementById('currentFile');
+            const currentVolumeEl = document.getElementById('currentVolume');
 
             if (playing) {
                 statusEl.classList.add('playing');
                 statusText.textContent = 'Playing';
                 currentFile.textContent = current || 'Unknown';
+                currentVolumeEl.textContent = volume !== undefined ? volume : '--';
             } else {
                 statusEl.classList.remove('playing');
                 statusText.textContent = 'Idle';
                 currentFile.textContent = 'None';
+                currentVolumeEl.textContent = '--';
             }
         }
 
@@ -534,13 +635,15 @@
             }
 
             const loop = document.getElementById('loopCheckbox').checked;
+            const volume = document.getElementById('volumeSlider').value;
 
             try {
-                const data = await apiCall('POST', `/play/${name}?loop=${loop}`);
+                const data = await apiCall('POST', `/play/${name}?loop=${loop}&volume=${volume}`);
                 showResponse(data);
 
                 currentlyPlaying = name;
-                updateStatus(true, name);
+                currentPlayingVolume = volume;
+                updateStatus(true, name, volume);
                 updateFileList();
             } catch (error) {
                 console.error('Error playing file:', error);
@@ -553,6 +656,7 @@
                 showResponse(data);
 
                 currentlyPlaying = null;
+                currentPlayingVolume = null;
                 updateStatus(false, null);
                 updateFileList();
             } catch (error) {
@@ -569,6 +673,7 @@
 
                 if (currentlyPlaying === name) {
                     currentlyPlaying = null;
+                    currentPlayingVolume = null;
                     updateStatus(false, null);
                 }
 
@@ -634,7 +739,8 @@
                     if (response.ok) {
                         currentlyPlaying = data.current;
                         currentDevice = data.audio_device;
-                        updateStatus(data.playing, data.current);
+                        currentPlayingVolume = data.current_volume;
+                        updateStatus(data.playing, data.current, data.current_volume);
                         updateDeviceStatus();
                         if (JSON.stringify(files) !== JSON.stringify(data.files)) {
                             files = data.files || [];

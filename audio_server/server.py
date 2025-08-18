@@ -86,6 +86,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         response = {
             "playing": self.player.is_playing(),
             "current": self.player.get_current(),
+            "current_volume": self.player.get_current_volume(),
             "files": self.storage.list_files(),
             "audio_device": self.player.get_audio_device()
         }
@@ -135,21 +136,38 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_json_response(404, {"error": f"Audio file '{name}' not found"})
 
     def _play_audio(self):
-        """Play audio file."""
+        """Play audio file with volume control."""
         # Parse path and query parameters
         path_parts = self.path.split('?')
         name = path_parts[0].split('/api/play/')[1]
 
-        # Check for loop parameter (default false)
-        loop = False
+        # Parse query parameters
+        params = {}
         if len(path_parts) > 1:
-            params = {}
             for param in path_parts[1].split('&'):
                 if '=' in param:
                     key, value = param.split('=', 1)
                     params[key] = value
-            if 'loop' in params:
-                loop = params['loop'].lower() in ('true', '1', 'yes')
+
+        # Check for required volume parameter
+        if 'volume' not in params:
+            self._send_json_response(400, {"error": "Missing required parameter: volume (0-100)"})
+            return
+
+        # Parse volume
+        try:
+            volume = int(params['volume'])
+            if volume < 0 or volume > 100:
+                self._send_json_response(400, {"error": "Volume must be between 0 and 100"})
+                return
+        except ValueError:
+            self._send_json_response(400, {"error": "Invalid volume value. Must be an integer between 0 and 100"})
+            return
+
+        # Check for loop parameter (default false)
+        loop = False
+        if 'loop' in params:
+            loop = params['loop'].lower() in ('true', '1', 'yes')
 
         # Check if audio device is configured
         current_device = self.player.get_audio_device()
@@ -172,8 +190,13 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_json_response(404, {"error": f"Audio file '{name}' not found"})
             return
 
-        if self.player.play(file_path, loop=loop):
-            self._send_json_response(200, {"message": f"Playing '{name}'" + (" (loop)" if loop else " (once)")})
+        if self.player.play(file_path, volume=volume, loop=loop):
+            response_msg = f"Playing '{name}' at {volume}% volume"
+            if loop:
+                response_msg += " (loop)"
+            else:
+                response_msg += " (once)"
+            self._send_json_response(200, {"message": response_msg})
         else:
             self._send_json_response(500, {"error": "Failed to start playback. Check audio device configuration."})
 

@@ -1,8 +1,8 @@
 openapi: 3.0.0
 info:
   title: Audio Server REST API
-  description: Network audio playback service with file storage
-  version: 1.0.0
+  description: Network audio playback service with file storage and volume control
+  version: 1.5.0
 
 servers:
   - url: http://{{host}}:{{port}}
@@ -19,9 +19,11 @@ tags:
   - name: Audio Files
     description: Audio file management
   - name: Playback
-    description: Audio playback control
+    description: Audio playback control with volume
   - name: Status
     description: Server status
+  - name: Devices
+    description: Audio device management
 
 paths:
   /api/status:
@@ -29,7 +31,7 @@ paths:
       tags:
         - Status
       summary: Get server status
-      description: Returns current playback status and available files
+      description: Returns current playback status, volume, and available files
       operationId: getStatus
       responses:
         '200':
@@ -46,15 +48,26 @@ paths:
                     type: string
                     nullable: true
                     description: Name of currently playing file
+                  current_volume:
+                    type: integer
+                    description: Current playback volume (0-100)
+                    minimum: 0
+                    maximum: 100
                   files:
                     type: array
                     items:
                       type: string
                     description: List of available audio files
+                  audio_device:
+                    type: string
+                    nullable: true
+                    description: Current audio device ID
                 example:
                   playing: true
                   current: "alarm"
+                  current_volume: 75
                   files: ["alarm", "waiting"]
+                  audio_device: "plughw:0,0"
 
   /api/audio:
     get:
@@ -219,10 +232,11 @@ paths:
     post:
       tags:
         - Playback
-      summary: Play audio file
+      summary: Play audio file with volume control
       description: |
-        Starts playing the specified audio file in a loop. 
-        If another file is playing, it will be stopped first.
+        Starts playing the specified audio file with the given volume. 
+        Volume is a required parameter (0-100). If another file is playing, 
+        it will be stopped first.
       operationId: playAudioFile
       parameters:
         - name: name
@@ -232,6 +246,23 @@ paths:
           schema:
             type: string
           example: alarm
+        - name: volume
+          in: query
+          required: true
+          description: Playback volume (0-100, where 0 is mute and 100 is maximum)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          example: 75
+        - name: loop
+          in: query
+          required: false
+          description: Whether to loop the audio file
+          schema:
+            type: boolean
+            default: false
+          example: true
       responses:
         '200':
           description: Playback started
@@ -242,7 +273,26 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Playing 'alarm'"
+                    example: "Playing 'alarm' at 75% volume (loop)"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                examples:
+                  missing_volume:
+                    value:
+                      error: "Missing required parameter: volume (0-100)"
+                  invalid_volume:
+                    value:
+                      error: "Volume must be between 0 and 100"
+                  no_device:
+                    value:
+                      error: "No audio device configured. Please select an audio device first."
         '404':
           description: File not found
           content:
@@ -262,7 +312,7 @@ paths:
                 properties:
                   error:
                     type: string
-                    example: "Failed to start playback"
+                    example: "Failed to start playback. Check audio device configuration."
 
   /api/stop:
     post:
@@ -284,3 +334,132 @@ paths:
                     examples:
                       - "Playback stopped"
                       - "No audio playing"
+
+  /api/devices:
+    get:
+      tags:
+        - Devices
+      summary: List audio devices
+      description: Returns list of available audio output devices
+      operationId: listDevices
+      responses:
+        '200':
+          description: List of audio devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Device identifier (e.g., plughw:0,0)
+                        name:
+                          type: string
+                          description: Human-readable device name
+                        card:
+                          type: integer
+                          description: Card number
+                        device:
+                          type: integer
+                          description: Device number
+                        card_id:
+                          type: string
+                          description: Card ID
+                        card_name:
+                          type: string
+                          description: Card name
+                        device_name:
+                          type: string
+                          description: Device name
+                  current:
+                    type: string
+                    nullable: true
+                    description: Currently selected device ID
+                example:
+                  devices:
+                    - id: "plughw:0,0"
+                      name: "HDA Intel PCH - ALC295 Analog"
+                      card: 0
+                      device: 0
+                      card_id: "PCH"
+                      card_name: "HDA Intel PCH"
+                      device_name: "ALC295 Analog"
+                  current: "plughw:0,0"
+
+  /api/device:
+    get:
+      tags:
+        - Devices
+      summary: Get current audio device
+      description: Returns the currently selected audio device
+      operationId: getCurrentDevice
+      responses:
+        '200':
+          description: Current device
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device:
+                    type: string
+                    nullable: true
+                    description: Device ID or null if not configured
+                example:
+                  device: "plughw:0,0"
+
+    put:
+      tags:
+        - Devices
+      summary: Set audio device
+      description: Sets the audio output device
+      operationId: setDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device:
+                  type: string
+                  description: Device ID to set
+              required:
+                - device
+            example:
+              device: "plughw:0,0"
+      responses:
+        '200':
+          description: Device set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Audio device set to 'plughw:0,0'"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "No device specified"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string

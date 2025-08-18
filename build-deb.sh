@@ -1,10 +1,10 @@
 #!/bin/bash
 
 PACKAGE_NAME="audio-server"
-VERSION="1.4.0"
+VERSION="1.5.0"
 ARCH="all"
 MAINTAINER="Your Name <your.email@example.com>"
-DESCRIPTION="Network audio playback service with file storage"
+DESCRIPTION="Network audio playback service with file storage and volume control"
 
 BUILD_DIR="./build"
 PACKAGE_DIR="${BUILD_DIR}/${PACKAGE_NAME}_${VERSION}_${ARCH}"
@@ -35,8 +35,9 @@ Architecture: ${ARCH}
 Maintainer: ${MAINTAINER}
 Description: ${DESCRIPTION}
  Audio Server provides a REST API for managing and playing audio files
- over the network. Features include file storage, playback control,
- audio device selection, and simple HTTP API for integration.
+ over the network. Features include file storage, playback control with
+ volume adjustment (0-100%), audio device selection, and simple HTTP API
+ for integration.
 Depends: python3 (>= 3.7), systemd, mpg123, alsa-utils
 EOF
 
@@ -70,6 +71,7 @@ echo "Storage directory: /var/lib/audio-server/data"
 echo "Configuration: /etc/audio-server/config.json"
 echo ""
 echo "NOTE: Select an audio device in the web interface before playing files"
+echo "      Volume control is now available (0-100%)"
 echo ""
 
 exit 0
@@ -155,6 +157,11 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "To uninstall:"
     echo "  sudo dpkg -r ${PACKAGE_NAME}"
+    echo ""
+    echo "New in version ${VERSION}:"
+    echo "  - Volume control (0-100%) with required parameter"
+    echo "  - Web console volume slider"
+    echo "  - Quick volume presets"
 else
     echo "Error: Package build failed"
     exit 1
