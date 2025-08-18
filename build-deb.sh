@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PACKAGE_NAME="audio-server"
+PACKAGE_NAME="mp3-player-server"
 VERSION="1.5.0"
 ARCH="all"
 MAINTAINER="Your Name <your.email@example.com>"
@@ -17,13 +17,13 @@ mkdir -p ${BUILD_DIR}
 
 # Create package structure
 mkdir -p ${PACKAGE_DIR}/DEBIAN
-mkdir -p ${PACKAGE_DIR}/usr/lib/audio-server/audio_server
-mkdir -p ${PACKAGE_DIR}/usr/lib/audio-server/web
+mkdir -p ${PACKAGE_DIR}/usr/lib/mp3-player-server/mp3_player_server
+mkdir -p ${PACKAGE_DIR}/usr/lib/mp3-player-server/web
 mkdir -p ${PACKAGE_DIR}/usr/bin
-mkdir -p ${PACKAGE_DIR}/etc/audio-server
+mkdir -p ${PACKAGE_DIR}/etc/mp3-player-server
 mkdir -p ${PACKAGE_DIR}/lib/systemd/system
-mkdir -p ${PACKAGE_DIR}/usr/share/doc/audio-server
-mkdir -p ${PACKAGE_DIR}/var/lib/audio-server/data
+mkdir -p ${PACKAGE_DIR}/usr/share/doc/mp3-player-server
+mkdir -p ${PACKAGE_DIR}/var/lib/mp3-player-server/data
 
 # Create control file
 cat > ${PACKAGE_DIR}/DEBIAN/control << EOF
@@ -34,7 +34,7 @@ Priority: optional
 Architecture: ${ARCH}
 Maintainer: ${MAINTAINER}
 Description: ${DESCRIPTION}
- Audio Server provides a REST API for managing and playing audio files
+ MP3 Player Server provides a REST API for managing and playing mp3 files
  over the network. Features include file storage, playback control with
  volume adjustment (0-100%), audio device selection, and simple HTTP API
  for integration.
@@ -47,28 +47,28 @@ cat > ${PACKAGE_DIR}/DEBIAN/postinst << 'EOF'
 set -e
 
 # Create default config if not exists
-if [ ! -f /etc/audio-server/config.json ]; then
-    echo '{"port": 8888, "storage_dir": "/var/lib/audio-server/data", "audio_device": null}' > /etc/audio-server/config.json
+if [ ! -f /etc/mp3-player-server/config.json ]; then
+    echo '{"port": 8888, "storage_dir": "/var/lib/mp3-player-server/data", "audio_device": null}' > /etc/mp3-player-server/config.json
 fi
 
 # Set permissions
-chmod 755 /var/lib/audio-server
-chmod 755 /var/lib/audio-server/data
+chmod 755 /var/lib/mp3-player-server
+chmod 755 /var/lib/mp3-player-server/data
 
 systemctl daemon-reload
-systemctl enable audio-server.service
-systemctl start audio-server.service
+systemctl enable mp3-player-server.service
+systemctl start mp3-player-server.service
 
 echo ""
-echo "Audio Server installed successfully!"
+echo "MP3 Player Server installed successfully!"
 echo ""
 echo "Commands:"
-echo "  audio-server status       - Show server status"
-echo "  audio-server set-port     - Change server port"
+echo "  mp3-player-server status       - Show server status"
+echo "  mp3-player-server set-port     - Change server port"
 echo ""
 echo "API endpoint: http://localhost:8888"
-echo "Storage directory: /var/lib/audio-server/data"
-echo "Configuration: /etc/audio-server/config.json"
+echo "Storage directory: /var/lib/mp3-player-server/data"
+echo "Configuration: /etc/mp3-player-server/config.json"
 echo ""
 echo "NOTE: Select an audio device in the web interface before playing files"
 echo "      Volume control is now available (0-100%)"
@@ -82,8 +82,8 @@ cat > ${PACKAGE_DIR}/DEBIAN/prerm << 'EOF'
 #!/bin/bash
 set -e
 
-systemctl stop audio-server.service || true
-systemctl disable audio-server.service || true
+systemctl stop mp3-player-server.service || true
+systemctl disable mp3-player-server.service || true
 
 exit 0
 EOF
@@ -94,8 +94,8 @@ cat > ${PACKAGE_DIR}/DEBIAN/postrm << 'EOF'
 set -e
 
 if [ "$1" = "purge" ]; then
-    rm -rf /etc/audio-server
-    rm -rf /var/lib/audio-server
+    rm -rf /etc/mp3-player-server
+    rm -rf /var/lib/mp3-player-server
 fi
 
 systemctl daemon-reload
@@ -109,41 +109,41 @@ chmod 755 ${PACKAGE_DIR}/DEBIAN/prerm
 chmod 755 ${PACKAGE_DIR}/DEBIAN/postrm
 
 # Copy Python modules
-cp -r audio_server/* ${PACKAGE_DIR}/usr/lib/audio-server/audio_server/
-chmod -R 755 ${PACKAGE_DIR}/usr/lib/audio-server/audio_server/
+cp -r mp3_player_server/* ${PACKAGE_DIR}/usr/lib/mp3-player-server/mp3_player_server/
+chmod -R 755 ${PACKAGE_DIR}/usr/lib/mp3-player-server/mp3_player_server/
 
 # Copy main script
-cp audio-server-main.py ${PACKAGE_DIR}/usr/lib/audio-server/
-chmod 755 ${PACKAGE_DIR}/usr/lib/audio-server/audio-server-main.py
+cp mp3-player-server-main.py ${PACKAGE_DIR}/usr/lib/mp3-player-server/
+chmod 755 ${PACKAGE_DIR}/usr/lib/mp3-player-server/mp3-player-server-main.py
 
 # Copy web files
-cp web/index.html ${PACKAGE_DIR}/usr/lib/audio-server/web/
-chmod 644 ${PACKAGE_DIR}/usr/lib/audio-server/web/index.html
+cp web/index.html ${PACKAGE_DIR}/usr/lib/mp3-player-server/web/
+chmod 644 ${PACKAGE_DIR}/usr/lib/mp3-player-server/web/index.html
 
 # Copy CLI script
-cp audio-server-cli.py ${PACKAGE_DIR}/usr/bin/audio-server
-chmod 755 ${PACKAGE_DIR}/usr/bin/audio-server
+cp mp3-player-server-cli.py ${PACKAGE_DIR}/usr/bin/mp3-player-server
+chmod 755 ${PACKAGE_DIR}/usr/bin/mp3-player-server
 
 # Copy systemd service
-cp debian/audio-server.service ${PACKAGE_DIR}/lib/systemd/system/
-chmod 644 ${PACKAGE_DIR}/lib/systemd/system/audio-server.service
+cp debian/mp3-player-server.service ${PACKAGE_DIR}/lib/systemd/system/
+chmod 644 ${PACKAGE_DIR}/lib/systemd/system/mp3-player-server.service
 
 # Create default config
-echo '{"port": 8888, "storage_dir": "/var/lib/audio-server/data", "audio_device": null}' > ${PACKAGE_DIR}/etc/audio-server/config.json
-chmod 644 ${PACKAGE_DIR}/etc/audio-server/config.json
+echo '{"port": 8888, "storage_dir": "/var/lib/mp3-player-server/data", "audio_device": null}' > ${PACKAGE_DIR}/etc/mp3-player-server/config.json
+chmod 644 ${PACKAGE_DIR}/etc/mp3-player-server/config.json
 
 # Copy documentation
 if [ -f README.md ]; then
-    cp README.md ${PACKAGE_DIR}/usr/share/doc/audio-server/
+    cp README.md ${PACKAGE_DIR}/usr/share/doc/mp3-player-server/
 fi
 
-if [ -f docs/audio-server-openapi.yaml ]; then
-    cp docs/audio-server-openapi.yaml ${PACKAGE_DIR}/usr/share/doc/audio-server/
-    chmod 644 ${PACKAGE_DIR}/usr/share/doc/audio-server/audio-server-openapi.yaml
+if [ -f docs/mp3-player-server-openapi.yaml ]; then
+    cp docs/mp3-player-server-openapi.yaml ${PACKAGE_DIR}/usr/share/doc/mp3-player-server/
+    chmod 644 ${PACKAGE_DIR}/usr/share/doc/mp3-player-server/mp3-player-server-openapi.yaml
 fi
 
 # Create version file
-echo "${VERSION}" > ${PACKAGE_DIR}/usr/share/doc/audio-server/VERSION
+echo "${VERSION}" > ${PACKAGE_DIR}/usr/share/doc/mp3-player-server/VERSION
 
 # Build the package
 dpkg-deb --build ${PACKAGE_DIR}

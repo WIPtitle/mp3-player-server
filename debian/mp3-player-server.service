@@ -6,7 +6,7 @@ After=network.target sound.target
 Type=simple
 User=root
 Group=audio
-ExecStart=/usr/bin/python3 -u /usr/lib/audio-server/audio-server-main.py
+ExecStart=/usr/bin/python3 -u /usr/lib/mp3-player-server/mp3-player-server-main.py
 Restart=on-failure
 RestartSec=5
 Environment="PYTHONUNBUFFERED=1"

@@ -4,9 +4,9 @@
 import json
 import os
 
-CONFIG_FILE = "/etc/audio-server/config.json"
+CONFIG_FILE = "/etc/mp3-player-server/config.json"
 DEFAULT_PORT = 8888
-DEFAULT_STORAGE_DIR = "/var/lib/audio-server/data"
+DEFAULT_STORAGE_DIR = "/var/lib/mp3-player-server/data"
 
 
 def load_config():

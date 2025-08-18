@@ -239,7 +239,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self.config['audio_device'] = device
 
             # Write config to file (json already imported at top)
-            with open('/etc/audio-server/config.json', 'w') as f:
+            with open('/etc/mp3-player-server/config.json', 'w') as f:
                 json.dump(self.config, f, indent=2)
 
             self._send_json_response(200, {"message": f"Audio device set to '{device}'"})

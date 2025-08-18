@@ -8,16 +8,16 @@ import socketserver
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from audio_server import AudioStorage, AudioPlayer, AudioRequestHandler
+from mp3_player_server import AudioStorage, AudioPlayer, AudioRequestHandler
 
 
 def main():
     """Start the Audio Server."""
     # Load config
-    CONFIG_FILE = "/etc/audio-server/config.json"
+    CONFIG_FILE = "/etc/mp3-player-server/config.json"
 
     port = 8888
-    storage_dir = "/var/lib/audio-server/data"
+    storage_dir = "/var/lib/mp3-player-server/data"
     audio_device = None
 
     if os.path.exists(CONFIG_FILE):

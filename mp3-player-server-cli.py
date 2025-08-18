@@ -6,8 +6,8 @@ import json
 import os
 import subprocess
 
-CONFIG_FILE = "/etc/audio-server/config.json"
-SERVICE_NAME = "audio-server.service"
+CONFIG_FILE = "/etc/mp3-player-server/config.json"
+SERVICE_NAME = "mp3-player-server.service"
 
 
 def load_config():
@@ -15,7 +15,7 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             return json.load(f)
-    return {"port": 8888, "storage_dir": "/var/lib/audio-server/data", "audio_device": None}
+    return {"port": 8888, "storage_dir": "/var/lib/mp3-player-server/data", "audio_device": None}
 
 
 def save_config(config):
@@ -52,7 +52,7 @@ def set_port(port):
             print(f"Audio Server now listening on port {port}")
         except subprocess.CalledProcessError:
             print("Error: Failed to restart service")
-            print("Try: sudo systemctl restart audio-server")
+            print("Try: sudo systemctl restart mp3-player-server")
 
     except ValueError:
         print("Error: Invalid port number")
@@ -63,7 +63,7 @@ def get_status():
     """Show current configuration and service status."""
     config = load_config()
     port = config.get("port", 8888)
-    storage_dir = config.get("storage_dir", "/var/lib/audio-server/data")
+    storage_dir = config.get("storage_dir", "/var/lib/mp3-player-server/data")
     audio_device = config.get("audio_device")
 
     print(f"Current port: {port}")
@@ -87,15 +87,15 @@ def show_help():
     print("Audio Server Control")
     print("")
     print("Commands:")
-    print("  audio-server status       Show current configuration and status")
-    print("  audio-server set-port <port>  Set server port (requires restart)")
-    print("  audio-server help         Show this help message")
+    print("  mp3-player-server status       Show current configuration and status")
+    print("  mp3-player-server set-port <port>  Set server port (requires restart)")
+    print("  mp3-player-server help         Show this help message")
     print("")
     print("Service control:")
-    print("  sudo systemctl start audio-server    Start service")
-    print("  sudo systemctl stop audio-server     Stop service")
-    print("  sudo systemctl restart audio-server  Restart service")
-    print("  sudo journalctl -u audio-server -f   View logs")
+    print("  sudo systemctl start mp3-player-server    Start service")
+    print("  sudo systemctl stop mp3-player-server     Stop service")
+    print("  sudo systemctl restart mp3-player-server  Restart service")
+    print("  sudo journalctl -u mp3-player-server -f   View logs")
 
 
 def main():
@@ -113,7 +113,7 @@ def main():
         show_help()
     else:
         print(f"Unknown command: {command}")
-        print("Use 'audio-server help' for usage information")
+        print("Use 'mp3-player-server help' for usage information")
         sys.exit(1)
 
 
