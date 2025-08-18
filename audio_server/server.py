@@ -140,8 +140,8 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         path_parts = self.path.split('?')
         name = path_parts[0].split('/api/play/')[1]
 
-        # Check for loop parameter (default true for backwards compatibility)
-        loop = True
+        # Check for loop parameter (default false)
+        loop = False
         if len(path_parts) > 1:
             params = {}
             for param in path_parts[1].split('&'):
@@ -152,8 +152,19 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
                 loop = params['loop'].lower() in ('true', '1', 'yes')
 
         # Check if audio device is configured
-        if not self.player.get_audio_device():
+        current_device = self.player.get_audio_device()
+        if not current_device:
             self._send_json_response(400, {"error": "No audio device configured. Please select an audio device first."})
+            return
+
+        # Check if the configured device is still available
+        available_devices = self.player.list_audio_devices()
+        device_ids = [d['id'] for d in available_devices]
+
+        if current_device not in device_ids:
+            self._send_json_response(400, {
+                "error": f"Audio device '{current_device}' is not available. It may have been disconnected. Please select a different device or reconnect it."
+            })
             return
 
         file_path = self.storage.get_path(name)

@@ -4,6 +4,7 @@
 import subprocess
 import threading
 import re
+import time
 from pathlib import Path
 from typing import Optional, List, Dict
 
@@ -53,11 +54,26 @@ class AudioPlayer:
                 self.current_process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.PIPE  # Capture stderr to detect immediate failures
                 )
+
+                # Give mpg123 a moment to start and check if it's still running
+                time.sleep(0.1)  # Small delay to allow mpg123 to initialize
+
+                # Check if process is still running
+                if self.current_process.poll() is not None:
+                    # Process has already exited, likely due to error
+                    stderr_output = self.current_process.stderr.read() if self.current_process.stderr else b""
+                    self.current_process = None
+                    print(f"mpg123 failed to start: {stderr_output.decode('utf-8', errors='ignore')}")
+                    return False
+
                 self.current_file = file_path.stem
                 return True
-            except Exception:
+            except Exception as e:
+                print(f"Error starting playback: {e}")
+                self.current_process = None
+                self.current_file = None
                 return False
 
     def _stop_internal(self) -> bool:
