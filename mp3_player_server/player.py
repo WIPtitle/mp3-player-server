@@ -147,13 +147,13 @@ class AudioPlayer:
 
     @staticmethod
     def list_audio_devices() -> List[Dict[str, str]]:
-        """List available audio devices using aplay -l."""
+        """List available audio devices using aplay -L."""
         devices = []
 
         try:
             # Run aplay with shorter timeout and handle errors better
             result = subprocess.run(
-                ["aplay", "-l"],
+                ["aplay", "-L"],
                 capture_output=True,
                 text=True,
                 timeout=2,  # Reduced timeout
@@ -166,31 +166,43 @@ class AudioPlayer:
                 return devices
 
             # Parse aplay output
-            lines = result.stdout.split('\n')
+            lines = result.stdout.strip().split('\n')
+            current_device = None
+            current_description = []
+
+            skip_devices = ["null", "jack", "oss", "lavrate", "samplerate",
+                            "speexrate", "speex", "upmix", "vdownmix", "usbstream"]
 
             for line in lines:
-                # Match card line
-                card_match = re.match(r'card (\d+): (\w+) \[(.*?)\], device (\d+): (.*?) \[(.*?)\]', line)
-                if card_match:
-                    card_num = card_match.group(1)
-                    card_id = card_match.group(2)
-                    card_name = card_match.group(3)
-                    device_num = card_match.group(4)
-                    device_id = card_match.group(5)
-                    device_name = card_match.group(6)
+                if line and not line.startswith(' '):
+                    if current_device and current_device not in skip_devices:
+                        description = ' '.join(current_description).strip()
+                        devices.append({
+                            "id": current_device,
+                            "name": description if description else current_device,
+                            "card": -1,
+                            "device": -1,
+                            "card_id": current_device,
+                            "card_name": current_device,
+                            "device_name": description if description else current_device
+                        })
 
-                    # Create device identifier in plughw format
-                    device_hw = f"plughw:{card_num},{device_num}"
+                    current_device = line
+                    current_description = []
+                elif line.strip() and current_device:
+                    current_description.append(line.strip())
 
-                    devices.append({
-                        "id": device_hw,
-                        "name": f"{card_name} - {device_name}",
-                        "card": int(card_num),
-                        "device": int(device_num),
-                        "card_id": card_id,
-                        "card_name": card_name,
-                        "device_name": device_name
-                    })
+            if current_device and current_device not in skip_devices:
+                description = ' '.join(current_description).strip()
+                devices.append({
+                    "id": current_device,
+                    "name": description if description else current_device,
+                    "card": -1,
+                    "device": -1,
+                    "card_id": current_device,
+                    "card_name": current_device,
+                    "device_name": description if description else current_device
+                })
 
         except subprocess.TimeoutExpired:
             # If aplay times out, return empty list
