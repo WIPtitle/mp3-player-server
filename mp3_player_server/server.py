@@ -10,7 +10,6 @@ from typing import Any, Dict
 class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
     """HTTP request handler for Audio Server."""
 
-    # These will be set by main
     storage = None
     player = None
     html_file = None
@@ -111,7 +110,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
         try:
             content_length = int(self.headers['Content-Length'])
-            if content_length > 50 * 1024 * 1024:  # 50MB limit
+            if content_length > 50 * 1024 * 1024:
                 self._send_json_response(413, {"error": "File too large (max 50MB)"})
                 return
 
@@ -126,7 +125,6 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         """Delete audio file."""
         name = self.path.split('/api/audio/')[1]
 
-        # Stop if currently playing
         if self.player.get_current() == name:
             self.player.stop()
 
@@ -137,11 +135,9 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _play_audio(self):
         """Play audio file with volume control."""
-        # Parse path and query parameters
         path_parts = self.path.split('?')
         name = path_parts[0].split('/api/play/')[1]
 
-        # Parse query parameters
         params = {}
         if len(path_parts) > 1:
             for param in path_parts[1].split('&'):
@@ -149,12 +145,10 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
                     key, value = param.split('=', 1)
                     params[key] = value
 
-        # Check for required volume parameter
         if 'volume' not in params:
             self._send_json_response(400, {"error": "Missing required parameter: volume (0-100)"})
             return
 
-        # Parse volume
         try:
             volume = int(params['volume'])
             if volume < 0 or volume > 100:
@@ -164,18 +158,24 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_json_response(400, {"error": "Invalid volume value. Must be an integer between 0 and 100"})
             return
 
-        # Check for loop parameter (default false)
         loop = False
         if 'loop' in params:
             loop = params['loop'].lower() in ('true', '1', 'yes')
 
-        # Check if audio device is configured
+        duration = None
+        if 'duration' in params:
+            try:
+                duration = int(params['duration'])
+                if duration <= 0:
+                    duration = None
+            except ValueError:
+                duration = None
+
         current_device = self.player.get_audio_device()
         if not current_device:
             self._send_json_response(400, {"error": "No audio device configured. Please select an audio device first."})
             return
 
-        # Check if the configured device is still available
         available_devices = self.player.list_audio_devices()
         device_ids = [d['id'] for d in available_devices]
 
@@ -190,12 +190,14 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_json_response(404, {"error": f"Audio file '{name}' not found"})
             return
 
-        if self.player.play(file_path, volume=volume, loop=loop):
+        if self.player.play(file_path, volume=volume, loop=loop, duration=duration):
             response_msg = f"Playing '{name}' at {volume}% volume"
             if loop:
                 response_msg += " (loop)"
             else:
                 response_msg += " (once)"
+            if duration:
+                response_msg += f" (max {duration}s)"
             self._send_json_response(200, {"message": response_msg})
         else:
             self._send_json_response(500, {"error": "Failed to start playback. Check audio device configuration."})
@@ -232,13 +234,10 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json_response(400, {"error": "No device specified"})
                 return
 
-            # Update player
             self.player.set_audio_device(device)
 
-            # Save to config
             self.config['audio_device'] = device
 
-            # Write config to file (json already imported at top)
             with open('/etc/mp3-player-server/config.json', 'w') as f:
                 json.dump(self.config, f, indent=2)
 
@@ -255,7 +254,6 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(data).encode())
         except (BrokenPipeError, ConnectionResetError):
-            # Client disconnected, ignore
             pass
         except Exception as e:
             print(f"Error sending response: {e}")

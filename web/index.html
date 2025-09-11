@@ -261,7 +261,6 @@
         .right-panel .file-list {
             max-height: 200px;
         }
-        /* Volume control styles */
         .volume-control {
             margin: 15px 0;
             padding: 10px;
@@ -330,6 +329,40 @@
             border-color: #0f0;
             background: #222;
         }
+        .duration-control {
+            margin: 15px 0;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        .duration-control h4 {
+            color: #0ff;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .duration-input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="number"] {
+            background: #222;
+            color: #0f0;
+            border: 1px solid #333;
+            padding: 5px;
+            border-radius: 3px;
+            width: 80px;
+        }
+        input[type="number"]:focus {
+            border-color: #0f0;
+            outline: none;
+        }
+        .duration-info {
+            color: #888;
+            font-size: 11px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -387,7 +420,6 @@
         <div class="panel right-panel">
             <h3>🎮 Playback Control</h3>
 
-            <!-- Volume Control -->
             <div class="volume-control">
                 <h4>🔊 Volume Control</h4>
                 <div class="volume-slider-container">
@@ -402,7 +434,21 @@
                 </div>
             </div>
 
-            <!-- Combined playback controls and loop option -->
+            <div class="duration-control">
+                <h4>⏱️ Max Duration</h4>
+                <div class="duration-input-container">
+                    <input type="number" id="durationInput" min="0" max="3600" value="0" step="1">
+                    <span style="color: #888;">seconds</span>
+                    <button onclick="setDuration(30)" title="30s">30s</button>
+                    <button onclick="setDuration(60)" title="1m">1m</button>
+                    <button onclick="setDuration(300)" title="5m">5m</button>
+                    <button onclick="setDuration(0)" title="No limit">∞</button>
+                </div>
+                <div class="duration-info">
+                    Set to 0 for no limit. Audio will auto-stop after specified seconds.
+                </div>
+            </div>
+
             <div class="playback-options">
                 <div>
                     <button onclick="stopPlayback()" id="stopBtn">⏹️ Stop All</button>
@@ -414,7 +460,6 @@
                 </div>
             </div>
 
-            <!-- File list -->
             <h4 style="margin-top: 0; color: #888;">Stored Files</h4>
             <div class="file-list" id="fileList">
                 <div style="color: #666; text-align: center;">Loading...</div>
@@ -437,9 +482,9 @@
         let currentDevice = null;
         let currentPlayingVolume = null;
 
-        // Volume control setup
         const volumeSlider = document.getElementById('volumeSlider');
         const volumeValue = document.getElementById('volumeValue');
+        const durationInput = document.getElementById('durationInput');
 
         volumeSlider.addEventListener('input', function() {
             volumeValue.textContent = this.value + '%';
@@ -448,6 +493,10 @@
         function setVolume(value) {
             volumeSlider.value = value;
             volumeValue.textContent = value + '%';
+        }
+
+        function setDuration(value) {
+            durationInput.value = value;
         }
 
         function showResponse(data, isError = false) {
@@ -636,9 +685,15 @@
 
             const loop = document.getElementById('loopCheckbox').checked;
             const volume = document.getElementById('volumeSlider').value;
+            const duration = document.getElementById('durationInput').value;
+
+            let url = `/play/${name}?loop=${loop}&volume=${volume}`;
+            if (duration && duration > 0) {
+                url += `&duration=${duration}`;
+            }
 
             try {
-                const data = await apiCall('POST', `/play/${name}?loop=${loop}&volume=${volume}`);
+                const data = await apiCall('POST', url);
                 showResponse(data);
 
                 currentlyPlaying = name;
@@ -724,14 +779,12 @@
             }
         });
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('endpoint').textContent = window.location.origin;
             await refreshDevices();
             await getStatus();
             await refreshFiles();
 
-            // Auto-refresh status every 5 seconds
             setInterval(async () => {
                 try {
                     const response = await fetch(API_BASE + '/status');
@@ -748,7 +801,6 @@
                         }
                     }
                 } catch (error) {
-                    // Silent fail for auto-refresh
                 }
             }, 5000);
         });

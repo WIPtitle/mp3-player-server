@@ -15,9 +15,10 @@ class AudioPlayer:
     def __init__(self, audio_device: Optional[str] = None):
         self.current_process: Optional[subprocess.Popen] = None
         self.current_file: Optional[str] = None
-        self.current_volume: int = 50  # Default volume 50%
+        self.current_volume: int = 50
         self.audio_device = audio_device
         self.lock = threading.Lock()
+        self.auto_stop_timer: Optional[threading.Timer] = None
 
     def set_audio_device(self, device: Optional[str]):
         """Set the audio output device."""
@@ -27,7 +28,7 @@ class AudioPlayer:
         """Get the current audio output device."""
         return self.audio_device
 
-    def play(self, file_path: Path, volume: int = 50, loop: bool = True) -> bool:
+    def play(self, file_path: Path, volume: int = 50, loop: bool = True, duration: Optional[int] = None) -> bool:
         """
         Start playing an audio file.
 
@@ -35,58 +36,49 @@ class AudioPlayer:
             file_path: Path to the audio file
             volume: Volume level (0-100)
             loop: Whether to loop the audio
+            duration: Maximum duration in seconds (auto-stop after this time)
         """
-        # Check if audio device is configured
         if not self.audio_device:
             return False
 
-        # Validate volume
         volume = max(0, min(100, volume))
         self.current_volume = volume
 
-        # Stop any current playback - do this outside the lock to avoid deadlock
         self._stop_internal()
 
         with self.lock:
             try:
-                # Build command
                 cmd = ["mpg123", "-q"]
-
-                # Add audio device
                 cmd.extend(["-a", self.audio_device])
 
-                # Add volume control
-                # mpg123 uses -f for gain/volume where 32768 is normal (100%)
-                # Scale volume from 0-100 to 0-32768
                 gain = int((volume / 100.0) * 32768)
                 cmd.extend(["-f", str(gain)])
 
-                # Add loop if requested
                 if loop:
                     cmd.extend(["--loop", "-1"])
 
-                # Add file path
                 cmd.append(str(file_path))
 
-                # Start mpg123
                 self.current_process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE  # Capture stderr to detect immediate failures
+                    stderr=subprocess.PIPE
                 )
 
-                # Give mpg123 a moment to start and check if it's still running
-                time.sleep(0.1)  # Small delay to allow mpg123 to initialize
+                time.sleep(0.1)
 
-                # Check if process is still running
                 if self.current_process.poll() is not None:
-                    # Process has already exited, likely due to error
                     stderr_output = self.current_process.stderr.read() if self.current_process.stderr else b""
                     self.current_process = None
                     print(f"mpg123 failed to start: {stderr_output.decode('utf-8', errors='ignore')}")
                     return False
 
                 self.current_file = file_path.stem
+
+                if duration and duration > 0:
+                    self.auto_stop_timer = threading.Timer(duration, self._auto_stop)
+                    self.auto_stop_timer.start()
+
                 return True
             except Exception as e:
                 print(f"Error starting playback: {e}")
@@ -95,13 +87,24 @@ class AudioPlayer:
                 self.current_volume = 50
                 return False
 
+    def _auto_stop(self):
+        """Automatically stop playback after duration expires."""
+        self._stop_internal()
+
+    def _cancel_timer(self):
+        """Cancel the auto-stop timer if it exists."""
+        if self.auto_stop_timer:
+            self.auto_stop_timer.cancel()
+            self.auto_stop_timer = None
+
     def _stop_internal(self) -> bool:
-        """Internal stop method without lock - for use when lock is already held or to avoid deadlock."""
+        """Internal stop method without lock."""
+        self._cancel_timer()
+
         with self.lock:
             if self.current_process:
                 try:
                     self.current_process.terminate()
-                    # Don't wait too long to avoid blocking
                     self.current_process.wait(timeout=1)
                 except subprocess.TimeoutExpired:
                     try:
@@ -109,7 +112,7 @@ class AudioPlayer:
                         self.current_process.wait(timeout=0.5)
                     except:
                         pass
-                except Exception:
+                except:
                     pass
 
                 self.current_process = None
@@ -126,13 +129,11 @@ class AudioPlayer:
         """Check if audio is currently playing."""
         with self.lock:
             if self.current_process:
-                # Use poll() which is non-blocking
                 return self.current_process.poll() is None
             return False
 
     def get_current(self) -> Optional[str]:
         """Get name of currently playing file."""
-        # Quick check without holding lock for too long
         with self.lock:
             if self.current_process and self.current_process.poll() is None:
                 return self.current_file
@@ -143,7 +144,7 @@ class AudioPlayer:
         with self.lock:
             if self.current_process and self.current_process.poll() is None:
                 return self.current_volume
-            return 50  # Default volume when not playing
+            return 50
 
     @staticmethod
     def list_audio_devices() -> List[Dict[str, str]]:
@@ -151,21 +152,18 @@ class AudioPlayer:
         devices = []
 
         try:
-            # Run aplay with shorter timeout and handle errors better
             result = subprocess.run(
                 ["aplay", "-L"],
                 capture_output=True,
                 text=True,
-                timeout=2,  # Reduced timeout
-                check=False,  # Don't raise on non-zero exit
-                env={'LANG': 'C'}  # Force English output for parsing
+                timeout=2,
+                check=False,
+                env={'LANG': 'C'}
             )
 
-            # Check if command succeeded
             if result.returncode != 0:
                 return devices
 
-            # Parse aplay output
             lines = result.stdout.strip().split('\n')
             current_device = None
             current_description = []
@@ -205,10 +203,8 @@ class AudioPlayer:
                 })
 
         except subprocess.TimeoutExpired:
-            # If aplay times out, return empty list
             pass
         except Exception:
-            # Any other error, return empty list
             pass
 
         return devices
