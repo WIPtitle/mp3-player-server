@@ -14,6 +14,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
     player = None
     html_file = None
     config = None
+    config_file = None  # Path to config file for saving
     user_mode = False
 
     def do_OPTIONS(self):
@@ -238,8 +239,11 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
             self.config['audio_device'] = device
 
-            with open('/etc/mp3-player-server/config.json', 'w') as f:
-                json.dump(self.config, f, indent=2)
+            # Save to config file if path is set
+            if self.config_file:
+                os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+                with open(self.config_file, 'w') as f:
+                    json.dump(self.config, f, indent=2)
 
             self._send_json_response(200, {"message": f"Audio device set to '{device}'"})
         except Exception as e:

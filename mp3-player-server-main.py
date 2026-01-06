@@ -13,13 +13,15 @@ from mp3_player_server import AudioStorage, AudioPlayer, AudioRequestHandler
 
 def main():
     """Start the Audio Server."""
-    # Load config
-    CONFIG_FILE = "/etc/mp3-player-server/config.json"
+    # Config path from env var, default to /etc for production
+    CONFIG_FILE = os.environ.get("MP3_PLAYER_SERVER_CONFIG_PATH", "/etc/mp3-player-server/config.json")
 
+    # Defaults
     port = 8888
     storage_dir = "/var/lib/mp3-player-server/data"
     audio_device = None
 
+    # Load config if exists
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -29,9 +31,18 @@ def main():
                 audio_device = config.get("audio_device", audio_device)
         except Exception as e:
             print(f"Error loading config: {e}")
-            config = {"port": port, "storage_dir": storage_dir, "audio_device": audio_device}
     else:
+        # Create default config
         config = {"port": port, "storage_dir": storage_dir, "audio_device": audio_device}
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(config, f, indent=2)
+            print(f"Created default config: {CONFIG_FILE}")
+        except PermissionError:
+            print(f"Warning: Cannot create config at {CONFIG_FILE} (permission denied)")
+        except Exception as e:
+            print(f"Warning: Cannot create config: {e}")
 
     # Initialize components
     storage = AudioStorage(storage_dir)
@@ -49,6 +60,7 @@ def main():
     AudioRequestHandler.player = player
     AudioRequestHandler.html_file = html_file
     AudioRequestHandler.config = config
+    AudioRequestHandler.config_file = CONFIG_FILE
     AudioRequestHandler.user_mode = False
 
     # Start HTTP server with explicit address reuse

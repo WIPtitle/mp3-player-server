@@ -4,7 +4,8 @@
 import json
 import os
 
-CONFIG_FILE = "/etc/mp3-player-server/config.json"
+# Config path from env var, default to /etc for production
+CONFIG_FILE = os.environ.get("MP3_PLAYER_SERVER_CONFIG_PATH", "/etc/mp3-player-server/config.json")
 DEFAULT_PORT = 8888
 DEFAULT_STORAGE_DIR = "/var/lib/mp3-player-server/data"
 
