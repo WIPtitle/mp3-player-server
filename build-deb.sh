@@ -128,9 +128,7 @@ chmod 755 ${PACKAGE_DIR}/usr/bin/mp3-player-server
 cp debian/mp3-player-server.service ${PACKAGE_DIR}/lib/systemd/system/
 chmod 644 ${PACKAGE_DIR}/lib/systemd/system/mp3-player-server.service
 
-# Create default config
-echo '{"port": 8888, "storage_dir": "/var/lib/mp3-player-server/data", "audio_device": null}' > ${PACKAGE_DIR}/etc/mp3-player-server/config.json
-chmod 644 ${PACKAGE_DIR}/etc/mp3-player-server/config.json
+# Config is created by postinst only if it doesn't exist (preserves existing config on upgrade)
 
 # Copy documentation
 if [ -f README.md ]; then
