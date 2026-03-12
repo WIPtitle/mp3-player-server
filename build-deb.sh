@@ -20,7 +20,6 @@ mkdir -p ${PACKAGE_DIR}/DEBIAN
 mkdir -p ${PACKAGE_DIR}/usr/lib/mp3-player-server/mp3_player_server
 mkdir -p ${PACKAGE_DIR}/usr/lib/mp3-player-server/web
 mkdir -p ${PACKAGE_DIR}/usr/bin
-mkdir -p ${PACKAGE_DIR}/etc/mp3-player-server
 mkdir -p ${PACKAGE_DIR}/lib/systemd/system
 mkdir -p ${PACKAGE_DIR}/usr/share/doc/mp3-player-server
 mkdir -p ${PACKAGE_DIR}/var/lib/mp3-player-server/data
@@ -46,7 +45,8 @@ cat > ${PACKAGE_DIR}/DEBIAN/postinst << 'EOF'
 #!/bin/bash
 set -e
 
-# Create default config if not exists
+# Create default config dir and file only if not exists (preserve on upgrade)
+mkdir -p /etc/mp3-player-server
 if [ ! -f /etc/mp3-player-server/config.json ]; then
     echo '{"port": 8888, "storage_dir": "/var/lib/mp3-player-server/data", "audio_device": null}' > /etc/mp3-player-server/config.json
 fi
