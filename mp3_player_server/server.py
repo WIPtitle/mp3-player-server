@@ -3,8 +3,12 @@
 
 import http.server
 import json
+import logging
 import os
+import time
 from typing import Any, Dict
+
+logger = logging.getLogger("mp3-player-server")
 
 
 class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -136,6 +140,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _play_audio(self):
         """Play audio file with volume control."""
+        t_start = time.monotonic()
         path_parts = self.path.split('?')
         name = path_parts[0].split('/api/play/')[1]
 
@@ -145,6 +150,8 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
                 if '=' in param:
                     key, value = param.split('=', 1)
                     params[key] = value
+
+        logger.info("[HTTP] POST /api/play/%s params=%s", name, params)
 
         if 'volume' not in params:
             self._send_json_response(400, {"error": "Missing required parameter: volume (0-100)"})
@@ -174,13 +181,20 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
         current_device = self.player.get_audio_device()
         if not current_device:
+            logger.error("[HTTP] play rejected: no audio device configured")
             self._send_json_response(400, {"error": "No audio device configured. Please select an audio device first."})
             return
 
+        t_before_devices = time.monotonic()
         available_devices = self.player.list_audio_devices()
+        t_after_devices = time.monotonic()
         device_ids = [d['id'] for d in available_devices]
+        logger.info("[HTTP] list_audio_devices took %.0fms, found %d devices, looking for '%s'",
+                     (t_after_devices - t_before_devices) * 1000, len(available_devices), current_device)
 
         if current_device not in device_ids:
+            logger.error("[HTTP] play rejected: device '%s' not in available devices: %s",
+                          current_device, device_ids)
             self._send_json_response(400, {
                 "error": f"Audio device '{current_device}' is not available. It may have been disconnected. Please select a different device or reconnect it."
             })
@@ -188,10 +202,19 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
         file_path = self.storage.get_path(name)
         if not file_path:
+            logger.error("[HTTP] play rejected: file '%s' not found", name)
             self._send_json_response(404, {"error": f"Audio file '{name}' not found"})
             return
 
-        if self.player.play(file_path, volume=volume, loop=loop, duration=duration):
+        t_before_play = time.monotonic()
+        result = self.player.play(file_path, volume=volume, loop=loop, duration=duration)
+        t_after_play = time.monotonic()
+
+        t_total = (t_after_play - t_start) * 1000
+        logger.info("[HTTP] play result=%s, player.play took %.0fms, total request %.0fms",
+                     result, (t_after_play - t_before_play) * 1000, t_total)
+
+        if result:
             response_msg = f"Playing '{name}' at {volume}% volume"
             if loop:
                 response_msg += " (loop)"
@@ -201,10 +224,12 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
                 response_msg += f" (max {duration}s)"
             self._send_json_response(200, {"message": response_msg})
         else:
+            logger.error("[HTTP] play FAILED for file '%s'", name)
             self._send_json_response(500, {"error": "Failed to start playback. Check audio device configuration."})
 
     def _stop_audio(self):
         """Stop audio playback."""
+        logger.info("[HTTP] POST /api/stop")
         if self.player.stop():
             self._send_json_response(200, {"message": "Playback stopped"})
         else:

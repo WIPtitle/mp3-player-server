@@ -4,11 +4,21 @@
 import os
 import sys
 import json
+import logging
 import socketserver
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mp3_player_server import AudioStorage, AudioPlayer, AudioRequestHandler
+
+# Setup logging - goes to stdout/stderr which systemd captures in journal
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%H:%M:%S',
+    stream=sys.stdout
+)
+logger = logging.getLogger("mp3-player-server")
 
 
 def main():
