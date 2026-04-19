@@ -15,6 +15,8 @@ logger = logging.getLogger("mp3-player-server")
 class AudioPlayer:
     """Handles audio playback using mpg123 with volume control."""
 
+    WARMUP_DURATION_S = 0.3
+
     def __init__(self, audio_device: Optional[str] = None):
         self.current_process: Optional[subprocess.Popen] = None
         self.current_file: Optional[str] = None
@@ -23,6 +25,24 @@ class AudioPlayer:
         self.lock = threading.Lock()
         self.auto_stop_timer: Optional[threading.Timer] = None
         self._stderr_thread: Optional[threading.Thread] = None
+
+    def _warmup_device(self):
+        """Wake the audio sink from suspend with an inaudible 1 Hz sine burst."""
+        if not self.audio_device:
+            return
+        try:
+            proc = subprocess.Popen(
+                ["speaker-test", "-D", self.audio_device, "-t", "sine",
+                 "-f", "1", "-l", "1", "-p", "1", "-P", "1"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(self.WARMUP_DURATION_S)
+            proc.terminate()
+            proc.wait(timeout=1)
+            logger.info("[warmup] audio device pre-warmed (%ss)", self.WARMUP_DURATION_S)
+        except Exception as e:
+            logger.warning("[warmup] failed (non-fatal): %s", e)
 
     def set_audio_device(self, device: Optional[str]):
         """Set the audio output device."""
@@ -69,6 +89,7 @@ class AudioPlayer:
                      file_path.name, volume, loop, duration, self.audio_device)
 
         self._stop_internal()
+        self._warmup_device()
 
         with self.lock:
             try:
