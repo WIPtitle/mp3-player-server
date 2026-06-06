@@ -20,6 +20,12 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
     config = None
     config_file = None  # Path to config file for saving
     user_mode = False
+    # Enable HTTP keep-alive so the alarm core reuses one warm TCP connection
+    # instead of opening a new one (with SYN/connect cost) on every command.
+    # NOTE: with HTTP/1.1 every response MUST carry a correct Content-Length
+    # (or the client blocks waiting for more body) — see _send_json_response /
+    # _serve_html / do_OPTIONS below.
+    protocol_version = "HTTP/1.1"
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
@@ -27,6 +33,7 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def do_GET(self):
@@ -48,17 +55,18 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _serve_html(self):
         """Serve the HTML dashboard."""
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
-        self.end_headers()
-
         if self.html_file and os.path.exists(self.html_file):
             with open(self.html_file, 'r', encoding='utf-8') as f:
                 content = f.read()
         else:
             content = "<html><body><h1>Audio Server</h1><p>Web console not found.</p></body></html>"
 
-        self.wfile.write(content.encode())
+        body = content.encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_PUT(self):
         """Handle PUT requests."""
@@ -277,11 +285,13 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
     def _send_json_response(self, code: int, data: Dict[str, Any]):
         """Send JSON response."""
         try:
+            body = json.dumps(data).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
+            self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as e:

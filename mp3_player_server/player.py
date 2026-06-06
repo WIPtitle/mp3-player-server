@@ -68,6 +68,26 @@ class AudioPlayer:
             elif exit_code is not None:
                 logger.info("[mpg123] [%s] process exited normally (code 0)", file_name)
 
+    def _log_pa_state(self):
+        """Log PulseAudio sink state for diagnostics. Runs off the play hot path."""
+        try:
+            pa_check = subprocess.run(
+                ["pactl", "list", "sink-inputs"],
+                capture_output=True, text=True, timeout=2
+            )
+            if pa_check.stdout.strip():
+                logger.info("[play] PA sink-inputs after start:\n%s", pa_check.stdout.strip())
+            else:
+                logger.warning("[play] PA has NO sink-inputs! Audio is NOT reaching PulseAudio")
+
+            pa_sinks = subprocess.run(
+                ["pactl", "list", "sinks", "short"],
+                capture_output=True, text=True, timeout=2
+            )
+            logger.info("[play] PA sinks: %s", pa_sinks.stdout.strip())
+        except Exception as e:
+            logger.warning("[play] could not check PA state: %s", e)
+
     def play(self, file_path: Path, volume: int = 50, loop: bool = True, duration: Optional[int] = None) -> bool:
         """
         Start playing an audio file.
@@ -126,24 +146,11 @@ class AudioPlayer:
 
                 self.current_file = file_path.stem
 
-                # Check if PulseAudio actually received the audio stream
-                try:
-                    pa_check = subprocess.run(
-                        ["pactl", "list", "sink-inputs"],
-                        capture_output=True, text=True, timeout=2
-                    )
-                    if pa_check.stdout.strip():
-                        logger.info("[play] PA sink-inputs after start:\n%s", pa_check.stdout.strip())
-                    else:
-                        logger.warning("[play] PA has NO sink-inputs! Audio is NOT reaching PulseAudio")
-
-                    pa_sinks = subprocess.run(
-                        ["pactl", "list", "sinks", "short"],
-                        capture_output=True, text=True, timeout=2
-                    )
-                    logger.info("[play] PA sinks: %s", pa_sinks.stdout.strip())
-                except Exception as e:
-                    logger.warning("[play] could not check PA state: %s", e)
+                # Diagnostic PulseAudio check — dispatched OFF the response path so
+                # it never adds latency to playback start. pactl can block up to its
+                # timeout and may not even be installed on ALSA-only devices, so it
+                # must not sit between starting mpg123 and replying to the caller.
+                threading.Thread(target=self._log_pa_state, daemon=True).start()
 
                 # Monitor stderr in background thread
                 self._stderr_thread = threading.Thread(

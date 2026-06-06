@@ -1,7 +1,7 @@
 #!/bin/bash
 
 PACKAGE_NAME="mp3-player-server"
-VERSION="1.5.0"
+VERSION="1.5.1"
 ARCH="all"
 MAINTAINER="Your Name <your.email@example.com>"
 DESCRIPTION="Network audio playback service with file storage and volume control"
