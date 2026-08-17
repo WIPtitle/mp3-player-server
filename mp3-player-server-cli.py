@@ -5,6 +5,7 @@ import sys
 import json
 import os
 import subprocess
+import tempfile
 
 CONFIG_FILE = "/etc/mp3-player-server/config.json"
 SERVICE_NAME = "mp3-player-server.service"
@@ -19,10 +20,28 @@ def load_config():
 
 
 def save_config(config):
-    """Save configuration to file."""
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+    """Save configuration to file (crash-safe atomic write)."""
+    directory = os.path.dirname(CONFIG_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(config, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, CONFIG_FILE)
+        dir_fd = os.open(directory, os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def set_port(port):
