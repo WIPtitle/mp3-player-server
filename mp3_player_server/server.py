@@ -8,6 +8,8 @@ import os
 import time
 from typing import Any, Dict
 
+from .config import atomic_write_json
+
 logger = logging.getLogger("mp3-player-server")
 
 
@@ -272,11 +274,9 @@ class AudioRequestHandler(http.server.BaseHTTPRequestHandler):
 
             self.config['audio_device'] = device
 
-            # Save to config file if path is set
+            # Save to config file if path is set (crash-safe atomic write)
             if self.config_file:
-                os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
-                with open(self.config_file, 'w') as f:
-                    json.dump(self.config, f, indent=2)
+                atomic_write_json(self.config_file, self.config)
 
             self._send_json_response(200, {"message": f"Audio device set to '{device}'"})
         except Exception as e:

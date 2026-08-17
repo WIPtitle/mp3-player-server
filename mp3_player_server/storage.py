@@ -2,6 +2,7 @@
 """Audio file storage management."""
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -21,8 +22,28 @@ class AudioStorage:
             safe_name += '.mp3'
 
         file_path = self.storage_dir / safe_name
-        with open(file_path, 'wb') as f:
-            f.write(data)
+        directory = str(self.storage_dir)
+        # Crash-safe: write temp + fsync + atomic rename + dir fsync, so a
+        # power loss mid-upload never leaves a half-written .mp3 in place.
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".upload-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, 'wb') as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, str(file_path))
+            dir_fd = os.open(directory, os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
     def exists(self, name: str) -> bool:
         """Check if audio file exists."""
